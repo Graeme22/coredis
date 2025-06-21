@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import time
 import weakref
+from contextlib import suppress
 from typing import TYPE_CHECKING, Any
 
 from coredis.connection import BaseConnection, Connection
@@ -42,12 +43,7 @@ class Sidecar:
 
     async def start(self: SidecarT, client: coredis.client.Client[Any]) -> SidecarT:
         self._client = weakref.ref(client, lambda *_: self.stop())
-        if not self.connection and self.client:
-            self.connection = await self.client.connection_pool.get_connection()
-            self.connection.register_connect_callback(self.on_reconnect)
-            await self.connection.connect()
-            if self.connection.tracking_client_id:  # noqa
-                await self.connection.update_tracking_client(False)
+        await self.__connect()
         if not self.read_task or self.read_task.done():
             self.read_task = asyncio.create_task(self.__read_loop())
         if not self.health_check_task or self.health_check_task.done():
@@ -58,14 +54,12 @@ class Sidecar:
         return (message,)  # noqa
 
     def stop(self) -> None:
-        try:
+        with suppress(RuntimeError):
             asyncio.get_running_loop()
             if self.read_task and not self.read_task.done():
                 self.read_task.cancel()
             if self.health_check_task and not self.health_check_task.done():
                 self.health_check_task.cancel()
-        except RuntimeError:
-            pass
         if self.connection:
             self.connection.disconnect()
             if self.client and self.connection:  # noqa
@@ -80,14 +74,19 @@ class Sidecar:
         self.client_id = connection.client_id
         self.last_checkin = time.monotonic()
 
+    async def __connect(self) -> None:
+        if not self.connection and self.client:
+            self.connection = await self.client.connection_pool.get_connection()
+            self.connection.register_connect_callback(self.on_reconnect)
+            await self.connection.connect()
+            if self.connection.tracking_client_id:  # noqa
+                await self.connection.update_tracking_client(False)
+
     async def __health_check(self) -> None:
         while True:
-            try:
-                if self.connection:
-                    await self.connection.send_command(b"PING")
-                await asyncio.sleep(self.health_check_interval)
-            except asyncio.CancelledError:
-                break
+            if self.connection:
+                await self.connection.send_command(b"PING")
+            await asyncio.sleep(self.health_check_interval)
 
     async def __read_loop(self) -> None:
         while self.connection:
@@ -100,15 +99,8 @@ class Sidecar:
                     continue
                 for m in self.process_message(response):
                     self.messages.put_nowait(m)
-            except asyncio.CancelledError:
-                break
             except ConnectionError:
                 if self.client and self.connection:
                     self.client.connection_pool.release(self.connection)
-                self.connection = None
-
-                if self.client:
-                    asyncio.get_running_loop().call_soon(
-                        asyncio.create_task, self.start(self.client)
-                    )
-                    break
+                    self.connection = None
+                    await self.__connect()
