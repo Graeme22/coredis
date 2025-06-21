@@ -480,10 +480,8 @@ class BasePubSub(Generic[AnyStr, PoolT]):
             self.connection_pool.release(self.connection)
             self.connection = None
         if self._consumer_task:
-            try:
+            with suppress(RuntimeError):
                 self._consumer_task.cancel()
-            except RuntimeError:  # noqa
-                pass
             self._consumer_task = None
 
         self.channels = {}
