@@ -8,7 +8,7 @@ from collections import defaultdict
 from ssl import SSLContext
 from typing import TYPE_CHECKING, Any, Self, cast, overload
 
-from anyio import create_task_group, sleep
+from anyio import AsyncContextManagerMixin, create_task_group, sleep
 from deprecated.sphinx import versionadded
 from packaging import version
 from packaging.version import InvalidVersion, Version
@@ -58,7 +58,6 @@ from coredis.typing import (
     Callable,
     Coroutine,
     ExecutionParameters,
-    Generator,
     Generic,
     Iterator,
     KeyT,
@@ -87,6 +86,7 @@ RedisT = TypeVar("RedisT", bound="Redis[Any]")
 
 
 class Client(
+    AsyncContextManagerMixin,
     Generic[AnyStr],
     CoreCommands[AnyStr],
     ModuleMixin[AnyStr],
@@ -311,14 +311,6 @@ class Client(
                 self._module_info[name] = version.Version(f"{major}.{minor}.{patch}")
         except (UnknownCommandError, AuthenticationError):
             self._module_info = {}
-
-    async def initialize(self) -> Self:
-        await self.connection_pool.initialize()
-        await self._populate_module_versions()
-        return self
-
-    def __await__(self: ClientT) -> Generator[Any, None, ClientT]:
-        return self.initialize().__await__()
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}<{repr(self.connection_pool)}>"
@@ -936,12 +928,14 @@ class Redis(Client[AnyStr]):
                 ),
             )
 
-    async def initialize(self) -> Redis[AnyStr]:
-        if not self.connection_pool.initialized:
-            await super().initialize()
+    @contextlib.asynccontextmanager
+    async def __asynccontextmanager__(self) -> AsyncGenerator[Self]:
+        async with self.connection_pool:
+            await self._populate_module_versions()
             if self.cache:
-                self.cache = await self.cache.initialize(self)
-        return self
+                await self.cache.initialize(self)
+            yield self
+            self.connection_pool.disconnect()
 
     async def execute_command(
         self,
@@ -955,7 +949,6 @@ class Redis(Client[AnyStr]):
         """
         return await self.retry_policy.call_with_retries(
             lambda: self._execute_command(command, callback=callback, **options),
-            before_hook=self.initialize,
         )
 
     async def _execute_command(
