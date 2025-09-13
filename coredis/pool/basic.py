@@ -217,12 +217,12 @@ class ConnectionPool(AsyncContextManagerMixin):
     def __repr__(self) -> str:
         return f"{type(self).__name__}<{self.connection_class.describe(self.connection_kwargs)}>"
 
-    async def acquire(self) -> BaseConnection:
+    async def acquire(self, dedicated: bool = False) -> BaseConnection:
         """
         Gets a connection from the pool, or creates a new one if all are busy.
         """
         connection = next(
-            (c for c in self._connections if c._limiter.value != 0 and not c._blocked),
+            (c for c in self._connections if c._limiter.value != 0 and not c.blocked.locked()),
             None,
         )
         if not connection:
@@ -231,7 +231,9 @@ class ConnectionPool(AsyncContextManagerMixin):
                     async with self._condition:
                         await self._condition.wait()
                     connection = next(
-                        c for c in self._connections if c._limiter.value != 0 and not c._blocked
+                        c
+                        for c in self._connections
+                        if c._limiter.value != 0 and not c.blocked.locked()
                     )
                 else:
                     raise ConnectionError("Too many connections")
@@ -240,6 +242,8 @@ class ConnectionPool(AsyncContextManagerMixin):
                 await self._task_group.start(connection.run, self)
                 self._connections.add(connection)
         connection._limiter.acquire_nowait()
+        if dedicated:
+            connection.blocked.acquire_nowait()
         await sleep(0)  # checkpoint
         return connection
 
