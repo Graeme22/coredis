@@ -35,7 +35,6 @@ from coredis.exceptions import (
     AuthenticationError,
     ConnectionError,
     PersistenceError,
-    RedisError,
     ReplicationError,
     TimeoutError,
     UnknownCommandError,
@@ -1002,6 +1001,7 @@ class Redis(Client[AnyStr]):
                     decode=options.get("decode", self._decodecontext.get()),
                     encoding=self._encodingcontext.get(),
                 )
+                connection._counter -= 1
                 reply = await request
                 async with create_task_group() as tg:
                     tg.start_soon(self._ensure_wait, command, connection)
@@ -1023,9 +1023,6 @@ class Redis(Client[AnyStr]):
                         value=reply,
                     )
             return callback(cached_reply if cache_hit else reply, version=self.protocol_version)
-        except RedisError:
-            connection.disconnect()
-            raise
         finally:
             self._ensure_server_version(connection.server_version)
             if should_block:
