@@ -464,6 +464,7 @@ wheels = [
 name = "coredis"
 source = { editable = "." }
 dependencies = [
+    { name = "anyio" },
     { name = "async-timeout" },
     { name = "beartype" },
     { name = "deprecated" },
@@ -595,6 +596,7 @@ test = [
 [package.metadata]
 requires-dist = [
     { name = "aiobotocore", marker = "extra == 'recipes'", specifier = ">=2.15.2" },
+    { name = "anyio", specifier = ">=4.10.0" },
     { name = "async-timeout", specifier = ">4,<6" },
     { name = "asyncache", marker = "extra == 'recipes'", specifier = ">=0.3.1" },
     { name = "beartype", specifier = ">=0.20" },
