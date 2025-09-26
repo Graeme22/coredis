@@ -33,9 +33,11 @@ from coredis.connection import (
 from coredis.credentials import AbstractCredentialProvider
 from coredis.exceptions import (
     AuthenticationError,
+    AuthorizationError,
     ConnectionError,
     PersistenceError,
     ReplicationError,
+    ResponseError,
     TimeoutError,
     UnknownCommandError,
 )
@@ -307,7 +309,13 @@ class Client(
                 ver, minor = divmod(ver, 100)
                 ver, major = divmod(ver, 100)
                 self._module_info[name] = version.Version(f"{major}.{minor}.{patch}")
-        except (UnknownCommandError, AuthenticationError):
+        except (UnknownCommandError, AuthenticationError, AuthorizationError):
+            self._module_info = {}
+        except ResponseError as err:
+            warnings.warn(
+                "Unable to determine module support due to response error from "
+                f"`MODULE LIST`: {err}."
+            )
             self._module_info = {}
 
     def __repr__(self) -> str:
