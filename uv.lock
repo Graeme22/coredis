@@ -461,7 +461,7 @@ wheels = [
 ]
 
 [[package]]
-name = "coredis"
+name = "coredis-anyio"
 source = { editable = "." }
 dependencies = [
     { name = "anyio" },
@@ -470,6 +470,7 @@ dependencies = [
     { name = "deprecated" },
     { name = "packaging" },
     { name = "pympler" },
+    { name = "setuptools" },
     { name = "typing-extensions" },
 ]
 
@@ -603,6 +604,7 @@ requires-dist = [
     { name = "deprecated", specifier = ">=1.2" },
     { name = "packaging", specifier = ">=21,<26" },
     { name = "pympler", specifier = ">1,<2" },
+    { name = "setuptools", specifier = ">=80.9.0" },
     { name = "typing-extensions", specifier = ">=4.13" },
 ]
 provides-extras = ["recipes"]

@@ -10,7 +10,7 @@ requires = [
 ]
 
 [project]
-name = "coredis"
+name = "coredis-anyio"
 dynamic = ["version"]
 description = "Python async client for Redis key-value store"
 readme = "README.md"
@@ -43,6 +43,7 @@ dependencies = [
   "packaging>=21,<26",
   "pympler>1,<2",
   "anyio>=4.10.0",
+  "setuptools>=80.9.0",
 ]
 
 [project.optional-dependencies]
