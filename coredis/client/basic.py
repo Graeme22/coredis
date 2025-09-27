@@ -1010,8 +1010,9 @@ class Redis(Client[AnyStr]):
                     decode=options.get("decode", self._decodecontext.get()),
                     encoding=self._encodingcontext.get(),
                 )
-                connection.pending -= 1
-                released = True
+                if not should_block:
+                    connection.pending -= 1
+                    released = True
                 reply = await request
                 async with create_task_group() as tg:
                     tg.start_soon(self._ensure_wait, command, connection)
@@ -1037,7 +1038,7 @@ class Redis(Client[AnyStr]):
             self._ensure_server_version(connection.server_version)
             if should_block:
                 connection.blocked = False
-            if not released:
+            elif not released:
                 connection.pending -= 1
 
     @overload
